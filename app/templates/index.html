@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Music Stem Separator — Tách Nhạc Cụ Bằng AI</title>
+  <meta name="description" content="Tách vocal, drums, bass, guitar, piano và các nhạc cụ từ bài hát bằng trí tuệ nhân tạo. Hỗ trợ WAV, MP3, FLAC, M4A." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="container">
+      <div class="logo">
+        <span class="logo-icon">🎸</span>
+        <div>
+          <span class="logo-title">StemAI</span>
+          <span class="logo-sub">Music Stem Separator</span>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="#upload-section">Tách stem</a>
+        <a href="#models-section">Models</a>
+        <a href="https://github.com/Koi252005/ai-music-stem-separator" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Hero ───────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="container hero-content">
+      <div class="hero-badge">🎓 Đồ án Trí tuệ Nhân tạo</div>
+      <h1>Tách Nhạc Cụ<br /><span class="gradient-text">Bằng Trí Tuệ Nhân Tạo</span></h1>
+      <p class="hero-desc">
+        Upload bài hát — AI sẽ tách thành từng stem riêng biệt: <strong>vocals</strong>, <strong>drums</strong>,
+        <strong>bass</strong>, <strong>guitar</strong>, <strong>piano</strong> và nhiều hơn nữa.
+        Nghe thử, tải về và tạo backing track chỉ trong vài phút.
+      </p>
+      <div class="hero-formats">
+        <span>WAV</span><span>MP3</span><span>FLAC</span><span>M4A</span>
+      </div>
+    </div>
+    <div class="hero-wave"></div>
+  </section>
+
+  <!-- ── Upload & Settings ──────────────────────────────────────────────── -->
+  <section id="upload-section" class="section">
+    <div class="container">
+      <div class="upload-card card">
+        <!-- Drop zone -->
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Kéo thả file âm thanh vào đây">
+          <div class="drop-zone-icon">🎵</div>
+          <div class="drop-zone-title">Kéo & thả file vào đây</div>
+          <div class="drop-zone-sub">hoặc</div>
+          <label class="btn btn-outline" for="file-input">
+            Chọn file
+          </label>
+          <input id="file-input" type="file" accept=".wav,.mp3,.flac,.m4a,.aac,.ogg,.opus" hidden />
+          <div class="drop-zone-formats">WAV · MP3 · FLAC · M4A · AAC · OGG</div>
+        </div>
+
+        <!-- File preview -->
+        <div id="file-preview" class="file-preview hidden">
+          <div class="file-preview-icon">🎵</div>
+          <div class="file-preview-info">
+            <div id="file-name" class="file-preview-name">filename.mp3</div>
+            <div id="file-size" class="file-preview-size">0 MB</div>
+          </div>
+          <button id="remove-file-btn" class="btn-icon" aria-label="Xoá file">✕</button>
+        </div>
+
+        <!-- Settings -->
+        <div class="settings-row">
+          <div class="settings-group">
+            <label class="settings-label" for="model-select">Chế độ tách</label>
+            <div class="select-wrapper">
+              <select id="model-select" class="settings-select">
+                <option value="guitar">🎸 Electric Guitar chuyên dụng</option>
+                <option value="htdemucs_ft" selected>🎼 Stem cơ bản (4 stems)</option>
+                <option value="htdemucs_6s">🎹 Stem mở rộng (6 stems)</option>
+                <option value="vocal_hq">🎤 Vocal chất lượng cao</option>
+              </select>
+            </div>
+            <div id="model-desc" class="settings-note"></div>
+          </div>
+          <div class="settings-group">
+            <label class="settings-label" for="device-select">Thiết bị xử lý</label>
+            <div class="select-wrapper">
+              <select id="device-select" class="settings-select">
+                <option value="auto" selected>⚡ Auto (GPU nếu có)</option>
+                <option value="cpu">🖥️ CPU</option>
+                <option value="cuda">🔥 CUDA (GPU)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <button id="start-btn" class="btn btn-primary btn-lg" disabled>
+          <span class="btn-icon-left">🚀</span> Bắt đầu tách stem
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Jobs List ─────────────────────────────────────────────────────── -->
+  <section id="jobs-section" class="section hidden">
+    <div class="container">
+      <h2 class="section-title">Kết quả tách stem</h2>
+      <div id="jobs-list"></div>
+    </div>
+  </section>
+
+  <!-- ── Models Info ────────────────────────────────────────────────────── -->
+  <section id="models-section" class="section">
+    <div class="container">
+      <h2 class="section-title">Các Model AI Được Dùng</h2>
+      <div class="models-grid" id="models-grid">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>
+        Đồ án Trí tuệ Nhân tạo — AI Music Stem Separator &nbsp;·&nbsp;
+        Model: <a href="https://huggingface.co/becruily/mel-band-roformer-guitar" target="_blank">MelBand-Roformer Guitar</a>,
+        <a href="https://github.com/facebookresearch/demucs" target="_blank">Demucs</a>
+      </p>
+      <p class="footer-note">
+        Tất cả xử lý diễn ra trên máy chủ cục bộ. File âm thanh không được lưu trữ lâu dài.
+      </p>
+    </div>
+  </footer>
+
+  <!-- ── Job card template ─────────────────────────────────────────────── -->
+  <template id="job-card-template">
+    <div class="job-card card" data-job-id="">
+      <div class="job-header">
+        <div class="job-info">
+          <div class="job-filename"></div>
+          <div class="job-model-badge"></div>
+        </div>
+        <div class="job-actions-top">
+          <button class="btn-icon job-delete-btn" aria-label="Xoá job">🗑️</button>
+        </div>
+      </div>
+
+      <div class="job-status-row">
+        <div class="job-status-dot"></div>
+        <div class="job-status-text"></div>
+        <div class="job-elapsed"></div>
+      </div>
+
+      <div class="job-progress-bar-wrap hidden">
+        <div class="job-progress-bar"></div>
+      </div>
+
+      <div class="job-stems-section hidden">
+        <h3 class="stems-heading">Stems</h3>
+        <div class="stems-grid"></div>
+        <div class="job-download-row">
+          <a class="btn btn-primary job-download-all-btn" href="#">
+            ⬇️ Tải tất cả (ZIP)
+          </a>
+        </div>
+      </div>
+
+      <div class="job-error-box hidden"></div>
+    </div>
+  </template>
+
+  <!-- ── Stem card template ─────────────────────────────────────────────── -->
+  <template id="stem-card-template">
+    <div class="stem-card">
+      <div class="stem-header">
+        <span class="stem-icon"></span>
+        <span class="stem-name"></span>
+        <a class="btn btn-sm stem-download-btn" href="#">⬇️ WAV</a>
+      </div>
+      <audio class="stem-audio" controls preload="none"></audio>
+    </div>
+  </template>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
