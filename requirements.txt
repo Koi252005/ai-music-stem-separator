@@ -16,6 +16,7 @@ PyYAML>=6.0
 # ── General stem separation ────────────────────────────────────────────────────
 demucs>=4.0.0        # htdemucs_ft, htdemucs_6s; auto-downloads model weights
 torchaudio>=2.0      # Audio loading for Demucs
+torchcodec>=0.14.0   # Required for torchaudio to save files on Windows
 
 # ── Web backend ────────────────────────────────────────────────────────────────
 fastapi>=0.100
