@@ -1,0 +1,32 @@
+# AI Music Stem Separator — requirements.txt
+# Full dependency list for the web app + CLI.
+# ffmpeg must be installed separately (https://ffmpeg.org) and on PATH.
+
+# ── Guitar separation model ────────────────────────────────────────────────────
+torch>=2.0
+numpy>=1.23
+soundfile>=0.12
+librosa>=0.10
+ml-collections>=0.1.1
+rotary-embedding-torch>=0.6
+einops>=0.6
+beartype>=0.14
+PyYAML>=6.0
+
+# ── General stem separation ────────────────────────────────────────────────────
+demucs>=4.0.0        # htdemucs_ft, htdemucs_6s; auto-downloads model weights
+torchaudio>=2.0      # Audio loading for Demucs
+
+# ── Web backend ────────────────────────────────────────────────────────────────
+fastapi>=0.100
+uvicorn[standard]>=0.20
+python-multipart>=0.0.6    # multipart/form-data file uploads
+jinja2>=3.0
+python-dotenv>=1.0
+
+# ── URL input (optional, for CLI) ─────────────────────────────────────────────
+yt-dlp>=2024.1
+
+# ── Dev / testing ─────────────────────────────────────────────────────────────
+# pytest>=7.0
+# httpx>=0.24     # async TestClient for FastAPI

@@ -1,0 +1,61 @@
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+envs/
+venv-guitar/
+venv-stems/
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── User uploads & outputs (job data – never commit) ─────────────────────────
+uploads/
+outputs/
+temp/
+tmp/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Model weights (large files – download once per README) ────────────────────
+models/*.ckpt
+models/*.pt
+models/*.pth
+models/*.bin
+models/mel_band_roformer_guitar/*.ckpt
+# Keep models/README.md and YAML configs tracked
+!models/README.md
+!models/**/*.yaml
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── Claude Code transient files ───────────────────────────────────────────────
+CLAUDE.local.md
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# ── Local test artifacts ──────────────────────────────────────────────────────
+_smoke*.py
+test_tone.wav
+test_cli_input.wav
+test_cli_output.wav
+*_no_guitar.*
+*_guitar_only.*
