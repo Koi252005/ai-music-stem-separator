@@ -76,47 +76,53 @@ class DemucsSeparator(BaseSeparator):
 
             _cb("separating", f"Running {self.model_id} on {resolved_device}…")
 
-            import subprocess
-            import sys
+            import demucs.pretrained
+            import demucs.apply
+            import torch
 
-            # Use Demucs CLI which is robust and handles memory well
-            cmd = [
-                sys.executable, "-m", "demucs.separate",
-                "-n", self.model_id,
-                "-d", resolved_device,
-                "--filename", "{stem}.{ext}",
-                "-o", str(output_dir),
-                str(wav_in)
-            ]
+            # Load model and move to CPU initially to save VRAM
+            model = demucs.pretrained.get_model(self.model_id)
+            model.cpu()
+            model.eval()
 
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            if proc.returncode != 0:
-                log.error("Demucs failed. stderr:\n%s", proc.stderr)
-                raise RuntimeError(f"Demucs processing failed:\n{proc.stderr.strip()}")
+            # Load audio using torchaudio (which works for loading, just not saving on Windows)
+            mix, sr = _load_audio(wav_in, model.samplerate)
+            
+            # Add batch dimension: (1, channels, length)
+            mix = mix.unsqueeze(0)
+
+            _cb("separating", "Processing audio…")
+            with torch.no_grad():
+                out = demucs.apply.apply_model(
+                    model, 
+                    mix, 
+                    device=resolved_device,
+                    shifts=1, 
+                    split=True, 
+                    overlap=0.25, 
+                    progress=False
+                )
+            
+            # Remove batch dimension: (sources, channels, length)
+            out = out[0]
 
             _cb("postprocessing", "Writing stem files…")
-            
-            # Demucs places files in `output_dir / model_id / stem.wav` by default
-            demucs_out_dir = output_dir / self.model_id
+            output_dir.mkdir(parents=True, exist_ok=True)
             
             result: dict[str, Path] = {}
-            for stem_name in self.output_stems:
-                expected_file = demucs_out_dir / f"{stem_name}.wav"
-                if not expected_file.exists():
-                    raise RuntimeError(f"Demucs did not produce expected stem: {stem_name}")
+            for i, stem_name in enumerate(model.sources):
+                if stem_name not in self.output_stems:
+                    continue # Skip stems we don't care about (though we care about all)
                 
-                # Move to the root of output_dir to match our expected format
-                final_path = output_dir / f"{stem_name}.wav"
-                # If they are the same (in case demucs changes behavior), do nothing
-                if expected_file.resolve() != final_path.resolve():
-                    shutil.move(str(expected_file), str(final_path))
+                wav = out[i].cpu().numpy()
+                peak = float(np.abs(wav).max()) if wav.size else 0.0
+                if peak > 1.0:
+                    wav = wav / peak
                 
-                result[stem_name] = final_path
-                log.debug("Wrote %s (%d bytes)", final_path, final_path.stat().st_size)
-
-            # Cleanup the model subfolder
-            if demucs_out_dir.exists() and demucs_out_dir.resolve() != output_dir.resolve():
-                shutil.rmtree(demucs_out_dir, ignore_errors=True)
+                out_path = output_dir / f"{stem_name}.wav"
+                sf.write(str(out_path), wav.T, model.samplerate, subtype="PCM_16")
+                result[stem_name] = out_path
+                log.debug("Wrote %s (%d bytes)", out_path, out_path.stat().st_size)
 
         return result
 
