@@ -4,10 +4,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.routes.jobs import router as jobs_router
 
@@ -25,8 +24,9 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ── Static files & templates ──────────────────────────────────────────────────
+# ── Static files ──────────────────────────────────────────────────────────────
 _HERE = Path(__file__).resolve().parent
+_TEMPLATE_PATH = _HERE / "templates" / "index.html"
 
 app.mount(
     "/static",
@@ -34,18 +34,20 @@ app.mount(
     name="static",
 )
 
-templates = Jinja2Templates(directory=str(_HERE / "templates"))
-
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(jobs_router)
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
+# NOTE: Jinja2Templates has a dict-key cache bug on Python 3.14+.
+# Since index.html has no server-side template variables (all logic is in JS),
+# we serve it as a plain static file to avoid the incompatibility.
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def index():
+    return HTMLResponse(content=_TEMPLATE_PATH.read_text(encoding="utf-8"))
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+

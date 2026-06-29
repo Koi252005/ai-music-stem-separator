@@ -76,35 +76,47 @@ class DemucsSeparator(BaseSeparator):
 
             _cb("separating", f"Running {self.model_id} on {resolved_device}…")
 
-            # Load model and audio using demucs API
-            import demucs.api as demucs_api
+            import subprocess
+            import sys
 
-            separator = demucs_api.Separator(
-                model=self.model_id,
-                device=resolved_device,
-                progress=False,
-            )
+            # Use Demucs CLI which is robust and handles memory well
+            cmd = [
+                sys.executable, "-m", "demucs.separate",
+                "-n", self.model_id,
+                "-d", resolved_device,
+                "--filename", "{stem}.{ext}",
+                "-o", str(output_dir),
+                str(wav_in)
+            ]
 
-            # Load audio
-            mix, sr = _load_audio(wav_in, separator.samplerate)
-
-            _cb("separating", "Processing audio…")
-            _, separated = separator.separate_tensor(mix, sr)
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                log.error("Demucs failed. stderr:\n%s", proc.stderr)
+                raise RuntimeError(f"Demucs processing failed:\n{proc.stderr.strip()}")
 
             _cb("postprocessing", "Writing stem files…")
-            output_dir.mkdir(parents=True, exist_ok=True)
-
+            
+            # Demucs places files in `output_dir / model_id / stem.wav` by default
+            demucs_out_dir = output_dir / self.model_id
+            
             result: dict[str, Path] = {}
-            for stem_name, stem_tensor in separated.items():
-                wav = stem_tensor.cpu().numpy()
-                # shape: (channels, samples) → transpose to (samples, channels)
-                peak = float(np.abs(wav).max()) if wav.size else 0.0
-                if peak > 1.0:
-                    wav = wav / peak
-                out_path = output_dir / f"{stem_name}.wav"
-                sf.write(str(out_path), wav.T, separator.samplerate, subtype="PCM_16")
-                result[stem_name] = out_path
-                log.debug("Wrote %s (%d bytes)", out_path, out_path.stat().st_size)
+            for stem_name in self.output_stems:
+                expected_file = demucs_out_dir / f"{stem_name}.wav"
+                if not expected_file.exists():
+                    raise RuntimeError(f"Demucs did not produce expected stem: {stem_name}")
+                
+                # Move to the root of output_dir to match our expected format
+                final_path = output_dir / f"{stem_name}.wav"
+                # If they are the same (in case demucs changes behavior), do nothing
+                if expected_file.resolve() != final_path.resolve():
+                    shutil.move(str(expected_file), str(final_path))
+                
+                result[stem_name] = final_path
+                log.debug("Wrote %s (%d bytes)", final_path, final_path.stat().st_size)
+
+            # Cleanup the model subfolder
+            if demucs_out_dir.exists() and demucs_out_dir.resolve() != output_dir.resolve():
+                shutil.rmtree(demucs_out_dir, ignore_errors=True)
 
         return result
 
