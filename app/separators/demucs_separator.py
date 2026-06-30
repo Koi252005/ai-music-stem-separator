@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -130,14 +131,27 @@ class DemucsSeparator(BaseSeparator):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _resolve_device(device: str) -> str:
+    """Resolve device string, safely falling back to CPU."""
     if device == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        return "cpu"
+    if device == "cuda":
+        try:
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        log.warning("CUDA requested but not available — falling back to CPU.")
+        return "cpu"
     return device
 
 
 def _decode_to_wav(src: Path, ffmpeg: str, dst: Path) -> None:
     """Decode any audio format to 44100 Hz stereo WAV via ffmpeg."""
-    import subprocess
     cmd = [
         ffmpeg, "-y", "-loglevel", "error",
         "-i", str(src),
@@ -152,11 +166,24 @@ def _decode_to_wav(src: Path, ffmpeg: str, dst: Path) -> None:
 
 
 def _load_audio(path: Path, target_sr: int) -> tuple[torch.Tensor, int]:
-    """Load audio file as a (2, samples) float32 tensor."""
-    import torchaudio
-    wav, sr = torchaudio.load(str(path))
+    """Load WAV file as a (2, samples) float32 tensor using soundfile.
+    
+    Uses soundfile instead of torchaudio to avoid the torchcodec/FFmpeg
+    DLL dependency on Windows (torchaudio >= 2.11 requires torchcodec).
+    """
+    # soundfile returns (samples, channels) ndarray
+    data, sr = sf.read(str(path), dtype="float32", always_2d=True)
+    # Transpose to (channels, samples)
+    wav = torch.from_numpy(data.T)
     if sr != target_sr:
-        wav = torchaudio.functional.resample(wav, sr, target_sr)
+        # Simple linear resampling via torch — good enough for audio that
+        # was already decoded by ffmpeg to the correct sample rate (44100).
+        # For the temp WAV we create with _decode_to_wav, sr == target_sr always.
+        ratio = target_sr / sr
+        new_length = int(wav.shape[1] * ratio)
+        wav = torch.nn.functional.interpolate(
+            wav.unsqueeze(0), size=new_length, mode="linear", align_corners=False
+        ).squeeze(0)
     if wav.shape[0] == 1:
         wav = wav.repeat(2, 1)
     return wav, target_sr
