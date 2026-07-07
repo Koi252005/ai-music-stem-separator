@@ -600,6 +600,12 @@ class StudioPlayer {
     if (!this._ready || this.playing) return;
     if (this.ctx.state === 'suspended') this.ctx.resume();
 
+    // Safety: ensure any old sources are stopped before creating new ones
+    for (const [, track] of Object.entries(this.tracks)) {
+      try { track.source?.stop(); } catch {}
+      track.source = null;
+    }
+
     const offset = this.pausedAt;
     this.startAt = this.ctx.currentTime - offset / this.speed;
 
@@ -612,15 +618,8 @@ class StudioPlayer {
       src.connect(track.gain);
       src.start(0, offset);
       track.source = src;
-      src.onended = () => {
-        if (this.playing && !this.loop) {
-          // Check if all tracks ended
-          this.playing = false;
-          this.pausedAt = 0;
-          this._updatePlayBtn();
-          this._stopRaf();
-        }
-      };
+      // We do not use src.onended because it fires asynchronously and inconsistently
+      // across different tracks. _startRaf handles the song ending perfectly.
     }
 
     this.playing = true;
@@ -685,11 +684,16 @@ class StudioPlayer {
   }
 
   _updateTimeline(elapsed) {
-    const pct = this.duration > 0 ? Math.min(elapsed / this.duration, 1) : 0;
+    if (this.duration <= 0) return;
+    let current = elapsed;
+    if (this.loop && this.playing) {
+      current = current % this.duration;
+    }
+    const pct = Math.min(current / this.duration, 1);
     this._progress.style.width = (pct * 100) + '%';
     this._playhead.style.left  = (pct * 100) + '%';
-    this._curTime.textContent  = fmtTime(elapsed);
-    this.el.querySelector('.time-current').textContent = fmtTime(elapsed);
+    this._curTime.textContent  = fmtTime(current);
+    this.el.querySelector('.time-current').textContent = fmtTime(current);
   }
 
   destroy() {
