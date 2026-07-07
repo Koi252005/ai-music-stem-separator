@@ -1,237 +1,210 @@
-# AI Music Stem Separator 🎸🥁🎹
+# AI Music Stem Separator — StemAI
 
-> **Đồ án môn Trí tuệ Nhân tạo**  
-> Tách nhạc cụ từ bài hát bằng AI — website và CLI hoàn chỉnh.
+> **Đồ án môn Trí tuệ Nhân tạo** — Website tách nhạc cụ từ bài hát sử dụng AI.
 
----
-
-## Giới thiệu
-
-**AI Music Stem Separator** là một ứng dụng web cho phép tách bất kỳ bài hát nào thành các thành phần riêng biệt (stems): vocals, drums, bass, guitar, piano... bằng các model AI tiên tiến.
-
-Dự án được xây dựng trên nền tảng CLI `guitar-bt` ban đầu (tách electric guitar chuyên dụng), sau đó mở rộng thành website đầy đủ tính năng với nhiều model.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.13%2B-green)](https://fastapi.tiangolo.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## Tính năng
+## Demo
 
-- 🎸 **Electric Guitar chuyên dụng** — MelBand-Roformer Guitar (becruily), cô lập guitar điện sạch hơn model tổng quát
-- 🎼 **Stem cơ bản** — Demucs htdemucs_ft: vocals, drums, bass, other
-- 🎹 **Stem mở rộng** — Demucs htdemucs_6s: vocals, drums, bass, guitar, piano, other
-- 🎤 **Vocal chất lượng cao** — htdemucs_ft tối ưu cho vocal
-- 🎶 **Backing Track** — Mix tự động tất cả stems trừ vocals
-- 🎵 **Instrumental** — Tương tự Backing Track (khi model chỉ có 1 vocal stem)
-- ⬇️ **Tải từng stem** hoặc **tải ZIP** toàn bộ
-- 🖥️ **CLI cũ vẫn hoạt động** độc lập (`remove_guitar.py`)
-- 🌐 **Upload drag & drop**, theo dõi tiến độ real-time
-- ⚡ **Auto CPU/CUDA** — tự chọn GPU nếu có
+Upload file nhạc → AI tách thành **Vocals / Drums / Bass / Guitar / Piano** → Nghe thử từng stem và tải về.
+
+**Chức năng chính:**
+- 🎸 **Electric Guitar Isolation** — Model chuyên dụng MelBand-Roformer (becruily)
+- 🎵 **4-Stem Split** — Vocals, Drums, Bass, Other (htdemucs_ft)
+- 🎹 **6-Stem Split** — Thêm Guitar và Piano (htdemucs_6s)
+- 🎤 **Vocal Isolator** — Tách vocal và backing track
+- 🎛️ **Multi-stem Player** — Nghe đồng bộ, mute/solo/volume từng track
+- 📊 **Waveform visualization** — Xem dạng sóng của từng stem
+
+---
+
+## Cài đặt
+
+### Yêu cầu hệ thống
+
+- Python 3.10+
+- [FFmpeg](https://ffmpeg.org/download.html) — **bắt buộc** (cần có trong PATH)
+- 4GB RAM tối thiểu (8GB khuyến nghị cho Demucs)
+- GPU (CUDA) tùy chọn — sẽ tự dùng CPU nếu không có GPU
+
+### Bước 1: Clone repository
+
+```bash
+git clone https://github.com/Koi252005/ai-music-stem-separator.git
+cd ai-music-stem-separator
+```
+
+### Bước 2: Cài dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Bước 3: Kiểm tra FFmpeg
+
+```bash
+ffmpeg -version
+```
+
+Nếu chưa cài, download tại https://ffmpeg.org/download.html và thêm vào PATH.
+
+### Bước 4: Tải model Guitar (đã có sẵn)
+
+Model guitar (`becruily_guitar.ckpt`) đã nằm trong `models/mel_band_roformer_guitar/`.
+
+> **Lưu ý:** File checkpoint (43MB) **không** được commit vào Git. Nếu chưa có, xem hướng dẫn tại `models/README.md`.
+
+### Bước 5: Chạy server
+
+```bash
+python run.py
+```
+
+Mở trình duyệt: http://localhost:8000
+
+#### Tùy chọn:
+
+```bash
+python run.py --host 127.0.0.1 --port 7860   # custom host/port
+python run.py --reload                          # auto-reload khi sửa code
+```
+
+---
+
+## Cách dùng
+
+1. **Upload** file nhạc (MP3, WAV, FLAC, M4A — tối đa 200MB)
+2. **Chọn chế độ** tách (Guitar / 4-Stem / 6-Stem / Vocal)
+3. **Nhấn "Bắt đầu tách stem"** — AI xử lý trong background
+4. **Nghe thử** trong Studio Player:
+   - Phát đồng bộ tất cả stem
+   - Mute/Solo từng track
+   - Điều chỉnh volume riêng
+   - Seek trên waveform
+5. **Tải về** từng stem (WAV) hoặc tất cả (ZIP)
 
 ---
 
 ## Kiến trúc
 
 ```
-project/
-├── app/                        # FastAPI web app
-│   ├── main.py                 # Entry point
-│   ├── config.py               # Cấu hình tập trung
-│   ├── utils.py                # Sanitize filename
-│   ├── routes/jobs.py          # REST API
-│   ├── services/job_service.py # Job queue & background worker
+├── app/
+│   ├── main.py              # FastAPI entry point
+│   ├── config.py            # Đường dẫn và cấu hình
+│   ├── utils.py             # Utilities
+│   ├── routes/
+│   │   └── jobs.py          # REST API: POST/GET/DELETE /api/jobs
+│   ├── services/
+│   │   └── job_service.py   # In-memory job queue + background worker
 │   ├── separators/
-│   │   ├── base.py             # Abstract base
-│   │   ├── guitar_separator.py # Adapter cho MelBand-Roformer
-│   │   └── demucs_separator.py # Adapter cho Demucs
-│   ├── templates/index.html    # Frontend HTML
-│   └── static/css/ js/         # CSS & JS thuần
-├── legacy_cli/                 # CLI gốc (không sửa)
-│   ├── remove_guitar.py
-│   └── roformer_engine.py
-├── roformer_arch/              # Vendored model architecture
-├── models/                     # Model weights (gitignored)
-│   └── README.md               # Hướng dẫn tải model
-├── tests/                      # Test suite
-├── remove_guitar.py            # CLI entry point (giữ nguyên)
-├── roformer_engine.py          # Guitar engine (giữ nguyên)
-├── run.py                      # Khởi động web server
-├── THIRD_PARTY_NOTICES.md      # Attribution
-└── .env.example
+│   │   ├── base.py          # BaseSeparator interface
+│   │   ├── guitar_separator.py   # MelBand-Roformer Guitar model
+│   │   └── demucs_separator.py   # Demucs htdemucs_ft / htdemucs_6s
+│   ├── static/
+│   │   ├── css/style.css    # Professional dark studio UI
+│   │   └── js/app.js        # Web Audio API player + SSE client
+│   └── templates/
+│       └── index.html       # Single-page app shell
+├── models/
+│   └── mel_band_roformer_guitar/
+│       ├── becruily_guitar.ckpt    # Guitar model checkpoint
+│       └── config_guitar_becruily.yaml
+├── legacy_cli/
+│   └── remove_guitar.py     # CLI gốc (vẫn hoạt động độc lập)
+├── roformer_arch/           # MelBand-Roformer architecture code
+├── roformer_engine.py       # Inference engine cho guitar model
+├── run.py                   # Khởi động server
+└── requirements.txt
 ```
+
+### API Endpoints
+
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/models` | Danh sách models |
+| `POST` | `/api/jobs` | Upload file + tạo job |
+| `GET` | `/api/jobs/{id}` | Trạng thái job (JSON) |
+| `GET` | `/api/jobs/{id}/events` | Server-Sent Events (real-time) |
+| `GET` | `/api/jobs/{id}/stems/{stem}` | Stream file WAV (Range-aware) |
+| `GET` | `/api/jobs/{id}/download` | Download ZIP tất cả stems |
+| `POST` | `/api/jobs/{id}/cancel` | Hủy job |
+| `DELETE` | `/api/jobs/{id}` | Xóa job + file |
 
 ---
 
-## Danh sách Model
+## Models
 
-| Chế độ | Model | Stems | Kích thước |
-|--------|-------|-------|------------|
-| Electric Guitar | MelBand-Roformer Guitar (becruily) | electric_guitar, no_electric_guitar | ~45 MB |
-| Stem Basic | htdemucs_ft (Demucs) | vocals, drums, bass, other | ~320 MB (auto download) |
-| Stem Extended | htdemucs_6s (Demucs) | vocals, drums, bass, guitar, piano, other | ~320 MB (auto download) |
-| Vocal HQ | htdemucs_ft | vocals, drums, bass, other | Dùng chung với Stem Basic |
+### Electric Guitar (MelBand-Roformer)
 
-> **Lưu ý:** Demucs không tách percussion riêng. `drums` = full drum kit. `other` = keys, synth, v.v.
+- **Nguồn:** [becruily/mel-band-roformer-guitar](https://huggingface.co/becruily/mel-band-roformer-guitar)
+- **Output:** `electric_guitar.wav` + `no_electric_guitar.wav`
+- **Kích thước:** ~43MB checkpoint
+- **Tốc độ (CPU):** ~30-90s cho bài 3 phút
 
----
+### Demucs (htdemucs_ft)
 
-## Nguồn Model
+- **Nguồn:** [facebookresearch/demucs](https://github.com/facebookresearch/demucs)
+- **Output:** vocals, drums, bass, other
+- **Tự động tải lần đầu** qua Demucs
+- **Tốc độ (CPU):** ~2-5 phút cho bài 3 phút
 
-- **MelBand-Roformer Guitar:** https://huggingface.co/becruily/mel-band-roformer-guitar
-- **Model architecture (roformer_arch/):** https://github.com/ZFTurbo/Music-Source-Separation-Training (MIT)
-- **Demucs:** https://github.com/facebookresearch/demucs (MIT)
+### Demucs (htdemucs_6s)
 
----
-
-## License
-
-- Code của project này: [MIT](LICENSE) (© 2026 0ji54n / Koi252005)
-- Vendored architecture (`roformer_arch/`): MIT — xem [`roformer_arch/NOTICE.md`](roformer_arch/NOTICE.md)
-- Guitar model weights: Xem trang Hugging Face của model
-- Demucs: MIT
-
-Xem chi tiết tại [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-
----
-
-## Cài đặt
-
-### Yêu cầu
-
-- Python 3.10+ (tested on 3.14)
-- [FFmpeg](https://ffmpeg.org) trên PATH
-- Git
-
-### Bước 1: Clone và cài dependency
-
-```powershell
-git clone https://github.com/Koi252005/ai-music-stem-separator.git
-cd ai-music-stem-separator
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-### Bước 2: Tải model guitar
-
-```powershell
-$dir = "models\mel_band_roformer_guitar"
-New-Item -ItemType Directory -Force -Path $dir | Out-Null
-$base = "https://huggingface.co/becruily/mel-band-roformer-guitar/resolve/main"
-Invoke-WebRequest "$base/config_guitar_becruily.yaml" -OutFile "$dir\config_guitar_becruily.yaml" -UseBasicParsing
-Invoke-WebRequest "$base/becruily_guitar.ckpt" -OutFile "$dir\becruily_guitar.ckpt" -UseBasicParsing
-```
-
-> Model Demucs được tải tự động khi dùng lần đầu.
-
----
-
-## Cách chạy
-
-### Website
-
-```powershell
-python run.py
-# Mở trình duyệt: http://localhost:8000
-```
-
-Với hot-reload (dev mode):
-
-```powershell
-python run.py --reload
-```
-
-### CLI guitar (chức năng gốc)
-
-```powershell
-# Tạo backing track (loại bỏ guitar)
-python remove_guitar.py "song.mp3"
-
-# Giữ riêng phần guitar
-python remove_guitar.py "song.mp3" --isolate -o guitar.wav
-
-# Output WAV, dùng CPU
-python remove_guitar.py "song.mp3" -f wav --device cpu
-
-# Từ YouTube URL
-python remove_guitar.py "https://www.youtube.com/watch?v=..."
-```
-
----
-
-## Cấu hình FFmpeg
-
-FFmpeg phải có trên PATH. Tải tại https://ffmpeg.org/download.html
-
-Windows (Chocolatey):
-```powershell
-choco install ffmpeg
-```
-
-Windows (Scoop):
-```powershell
-scoop install ffmpeg
-```
-
-Kiểm tra:
-```powershell
-ffmpeg -version
-```
-
----
-
-## Cấu hình CPU và CUDA
-
-Trong `.env` (copy từ `.env.example`):
-
-```
-DEFAULT_DEVICE=auto    # auto | cpu | cuda
-```
-
-Hoặc qua giao diện web khi upload file.
-
-| Device | Tốc độ | Yêu cầu |
-|--------|--------|---------|
-| CPU | Chậm (~1-3× thời lượng bài) | Không cần GPU |
-| CUDA (GPU) | Nhanh (~10-30× CPU) | NVIDIA GPU + CUDA |
-| Auto | Tự chọn tốt nhất | — |
-
----
-
-## Giới hạn thực tế
-
-- Tách stem không hoàn hảo — có thể bị rò tiếng (bleed) giữa các stems
-- Guitar acoustic có thể bị phát hiện nhầm là electric guitar
-- Demucs không tách percussion riêng khỏi drums
-- GPU RTX 3050 Laptop (4 GB VRAM) có thể gặp lỗi OOM với bài dài → dùng CPU
-- Thời gian xử lý CPU: khoảng 1–3× thời lượng bài hát
+- **Output:** vocals, drums, bass, guitar, piano, other
+- **Tốc độ (CPU):** ~3-7 phút cho bài 3 phút
 
 ---
 
 ## Xử lý lỗi thường gặp
 
-**`[Errno 22] Invalid argument`** — Tên file chứa ký tự đặc biệt. Hệ thống tự sanitize, nhưng đảm bảo FFmpeg đã cài.
+### "ffmpeg not found"
+Cài FFmpeg và đảm bảo nó có trong PATH:
+```bash
+# Windows: Download từ https://ffmpeg.org/download.html
+# macOS: brew install ffmpeg
+# Linux: sudo apt install ffmpeg
+```
 
-**`ffmpeg not found`** — Cài FFmpeg và thêm vào PATH.
+### "Guitar model not found"
+Đảm bảo file tồn tại:
+```
+models/mel_band_roformer_guitar/becruily_guitar.ckpt
+models/mel_band_roformer_guitar/config_guitar_becruily.yaml
+```
 
-**`Guitar model not found`** — Chạy lệnh download model ở bước 2.
+### Demucs tải chậm lần đầu
+Demucs tự download model (~130MB) lần đầu chạy. Cần kết nối internet.
 
-**CUDA OOM** — Chọn device = CPU trong giao diện web.
-
-**`demucs not installed`** — Chạy `pip install demucs`.
+### Server crash khi tách
+Kiểm tra RAM — Demucs cần ~2-4GB. Đóng ứng dụng khác.
 
 ---
 
-## Chạy tests
+## Phát triển
 
-```powershell
-pip install pytest httpx
-pytest tests/ -v
+```bash
+# Chạy với auto-reload
+python run.py --reload
+
+# Test pipeline
+python test_job.py
 ```
 
 ---
 
-## Attribution
+## Credits
 
-Project ban đầu: `guitar-bt` CLI (tách electric guitar) — phát triển bởi 0ji54n / Koi252005.  
-Mở rộng thành website stem separator hoàn chỉnh.  
-Chi tiết: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+- **MelBand-Roformer Guitar Model** — [becruily](https://huggingface.co/becruily) (MIT License)
+- **Demucs** — [Facebook Research](https://github.com/facebookresearch/demucs) (MIT License)
+- **FastAPI** — [Sebastián Ramírez](https://fastapi.tiangolo.com)
+
+---
+
+## License
+
+MIT License — Xem file [LICENSE](LICENSE).

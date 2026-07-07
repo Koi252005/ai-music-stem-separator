@@ -1,8 +1,8 @@
 """app/separators/guitar_separator.py — Adapter for the electric-guitar model.
 
 Wraps the original ``roformer_engine`` so the web backend can call it without
-touching ``remove_guitar.py`` (the legacy CLI).  The CLI continues to work
-independently from ``legacy_cli/remove_guitar.py``.
+breaking ``legacy_cli/remove_guitar.py`` (the legacy CLI). The CLI continues
+to work independently.
 
 Output stems
 ------------
@@ -11,10 +11,9 @@ Output stems
 """
 from __future__ import annotations
 
+import logging
 import shutil
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -24,10 +23,13 @@ import torch
 from app.config import GUITAR_CONFIG, GUITAR_CKPT, PROJECT_ROOT
 from app.separators.base import BaseSeparator
 
-# The roformer_arch/ and roformer_engine.py live at project root level.
+# The roformer_arch/, roformer_engine.py and legacy_cli/ live at project root.
 _ROOT = PROJECT_ROOT
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+for _p in [str(_ROOT), str(_ROOT / "legacy_cli")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+log = logging.getLogger(__name__)
 
 
 class GuitarSeparator(BaseSeparator):
@@ -63,6 +65,7 @@ class GuitarSeparator(BaseSeparator):
         _cb("loading_model", "Loading MelBand-Roformer Guitar model…")
 
         import roformer_engine  # type: ignore[import]
+        import remove_guitar    # type: ignore[import]  — legacy CLI (decode_to_wav)
 
         resolved_device = _resolve_device(device)
         _cb("separating", f"Separating guitar on {resolved_device}…")
@@ -73,12 +76,12 @@ class GuitarSeparator(BaseSeparator):
                 "ffmpeg not found on PATH. Install ffmpeg and retry."
             )
 
-        from remove_guitar import decode_to_wav  # reuse the existing decoder
-
+        # Delegate fully to roformer_engine.separate() which manages its own
+        # temp directory and calls decode_to_wav internally.
         stems, sr = roformer_engine.separate(
             source_path=input_path,
             ffmpeg=ffmpeg,
-            decode_to_wav=decode_to_wav,
+            decode_to_wav=remove_guitar.decode_to_wav,
             device=resolved_device,
             config_path=GUITAR_CONFIG,
             ckpt_path=GUITAR_CKPT,
@@ -108,5 +111,18 @@ class GuitarSeparator(BaseSeparator):
 
 def _resolve_device(device: str) -> str:
     if device == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        return "cpu"
+    if device == "cuda":
+        try:
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        log.warning("CUDA requested but not available — falling back to CPU.")
+        return "cpu"
     return device

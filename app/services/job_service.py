@@ -57,9 +57,13 @@ class JobService:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._queue: list[str] = []
+        self._cancelled: set[str] = set()  # job IDs marked for cancellation
         self._queue_event = threading.Event()
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
+        # Cleanup thread removes old finished jobs every 10 minutes
+        self._cleanup = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self._cleanup.start()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -103,6 +107,25 @@ class JobService:
                 shutil.rmtree(p, ignore_errors=True)
         return True
 
+    def cancel_job(self, job_id: str) -> bool:
+        """Request cancellation of a queued or in-progress job."""
+        with self._lock:
+            if job_id not in self._jobs:
+                return False
+            self._cancelled.add(job_id)
+            job = self._jobs[job_id]
+            if job.status in (JobStatus.QUEUED,):
+                # Remove from queue immediately if not yet started
+                try:
+                    self._queue.remove(job_id)
+                except ValueError:
+                    pass
+                job.status = JobStatus.FAILED
+                job.error = "Cancelled by user."
+                job.stage_detail = "Cancelled"
+                job.finished_at = time.time()
+        return True
+
     def all_jobs(self) -> list[Job]:
         with self._lock:
             return list(self._jobs.values())
@@ -125,6 +148,14 @@ class JobService:
                 self._process(job)
 
     def _process(self, job: Job):
+        # Check if cancelled before starting
+        with self._lock:
+            if job.id in self._cancelled:
+                job.status = JobStatus.FAILED
+                job.error = "Cancelled by user."
+                job.finished_at = time.time()
+                return
+
         job.started_at = time.time()
         try:
             self._update(job, JobStatus.PREPROCESSING, "Preparing input file…")
@@ -220,6 +251,23 @@ class JobService:
                 if p.exists():
                     zf.write(p, arcname=p.name)
         return zip_path
+
+    def _cleanup_loop(self):
+        """Remove completed/failed jobs older than 1 hour to free disk space."""
+        TTL_SECONDS = 3600
+        while True:
+            time.sleep(600)  # check every 10 minutes
+            now = time.time()
+            to_delete = []
+            with self._lock:
+                for job_id, job in self._jobs.items():
+                    if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                        age = now - (job.finished_at or job.created_at)
+                        if age > TTL_SECONDS:
+                            to_delete.append(job_id)
+            for job_id in to_delete:
+                log.info("Auto-cleanup: removing expired job %s", job_id)
+                self.delete_job(job_id)
 
 
 # ── Mix helpers ───────────────────────────────────────────────────────────────

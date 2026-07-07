@@ -1,0 +1,383 @@
+INFO:     Started server process [28620]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:7860 (Press CTRL+C to quit)
+INFO:     127.0.0.1:63059 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63059 - "GET /static/css/style.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52822 - "GET /static/js/app.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52822 - "GET /api/models HTTP/1.1" 200 OK
+2026-06-30 05:03:46,527 INFO app.routes.jobs ù Saved 3287197 bytes as input.mp3 for job 03ccb770-ae77-441e-b36f-ba82f80330d3
+2026-06-30 05:03:46,527 INFO app.services.job_service ù Job 03ccb770-ae77-441e-b36f-ba82f80330d3 queued: model=htdemucs_ft device=auto
+INFO:     127.0.0.1:56376 - "POST /api/jobs HTTP/1.1" 200 OK
+2026-06-30 05:03:48,884 INFO app.separators.demucs_separator ù Demucs htdemucs_ft on cpu: F:\THE FUCKING PROJECT\guitar_backingtrack-main\uploads\03ccb770-ae77-441e-b36f-ba82f80330d3\input.mp3
+INFO:     127.0.0.1:56376 - "GET /api/jobs/03ccb770-ae77-441e-b36f-ba82f80330d3 HTTP/1.1" 200 OK
+2026-06-30 05:03:51,102 ERROR app.services.job_service ù Job 03ccb770-ae77-441e-b36f-ba82f80330d3 failed:
+Traceback (most recent call last):
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\app\services\job_service.py", line 148, in _process
+    stem_paths = separator.separate(
+        input_path=input_path,
+    ...<2 lines>...
+        progress_callback=progress_callback,
+    )
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\app\separators\demucs_separator.py", line 89, in separate
+    mix, sr = _load_audio(wav_in, model.samplerate)
+              ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\app\separators\demucs_separator.py", line 157, in _load_audio
+    wav, sr = torchaudio.load(str(path))
+              ~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchaudio\__init__.py", line 86, in load
+    return load_with_torchcodec(
+        uri,
+    ...<6 lines>...
+        backend=backend,
+    )
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchaudio\_torchcodec.py", line 82, in load_with_torchcodec
+    from torchcodec.decoders import AudioDecoder
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\__init__.py", line 12, in <module>
+    from . import decoders, encoders, samplers, transforms  # noqa
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\decoders\__init__.py", line 7, in <module>
+    from .._core import AudioStreamMetadata, VideoStreamMetadata
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_core\__init__.py", line 8, in <module>
+    from ._metadata import (
+    ...<5 lines>...
+    )
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_core\_metadata.py", line 15, in <module>
+    from torchcodec._core.ops import (
+    ...<3 lines>...
+    )
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_core\ops.py", line 38, in <module>
+    load_torchcodec_shared_libraries()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 111, in load_torchcodec_shared_libraries
+    raise RuntimeError(
+    ...<16 lines>...
+    )
+RuntimeError: Could not load libtorchcodec. Likely causes:
+          1. FFmpeg is not properly installed in your environment. We support
+             versions 4, 5, 6, 7, and 8, and we attempt to load libtorchcodec
+             for each of those versions. Errors for versions not installed on
+             your system are expected; only the error for your installed FFmpeg
+             version is relevant. On Windows, ensure you've installed the
+             "full-shared" version which ships DLLs.
+          2. The PyTorch version (2.12.1+cpu) is not compatible with
+             this version of TorchCodec. Refer to the version compatibility
+             table:
+             https://github.com/pytorch/torchcodec?tab=readme-ov-file#installing-torchcodec.
+          3. Another runtime dependency; see exceptions below.
+
+        The following exceptions were raised as we tried to load libtorchcodec:
+        
+[start of libtorchcodec loading traceback]
+FFmpeg version 8:
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1509, in load_library
+    ctypes.CDLL(path)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 433, in __init__
+    self._handle = self._load_library(name, mode, handle, winmode)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 451, in _load_library
+    return _LoadLibrary(self._name, winmode)
+FileNotFoundError: Could not find module 'C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core8.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1511, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core8.dll
+
+FFmpeg version 7:
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1509, in load_library
+    ctypes.CDLL(path)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 433, in __init__
+    self._handle = self._load_library(name, mode, handle, winmode)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 451, in _load_library
+    return _LoadLibrary(self._name, winmode)
+FileNotFoundError: Could not find module 'C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core7.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1511, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core7.dll
+
+FFmpeg version 6:
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1509, in load_library
+    ctypes.CDLL(path)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 433, in __init__
+    self._handle = self._load_library(name, mode, handle, winmode)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 451, in _load_library
+    return _LoadLibrary(self._name, winmode)
+FileNotFoundError: Could not find module 'C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core6.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1511, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core6.dll
+
+FFmpeg version 5:
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1509, in load_library
+    ctypes.CDLL(path)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 433, in __init__
+    self._handle = self._load_library(name, mode, handle, winmode)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 451, in _load_library
+    return _LoadLibrary(self._name, winmode)
+FileNotFoundError: Could not find module 'C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core5.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1511, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core5.dll
+
+FFmpeg version 4:
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1509, in load_library
+    ctypes.CDLL(path)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 433, in __init__
+    self._handle = self._load_library(name, mode, handle, winmode)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\ctypes\__init__.py", line 451, in _load_library
+    return _LoadLibrary(self._name, winmode)
+FileNotFoundError: Could not find module 'C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core4.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\_internally_replaced_utils.py", line 93, in load_torchcodec_shared_libraries
+    torch.ops.load_library(core_library_path)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\_ops.py", line 1511, in load_library
+    raise OSError(f"Could not load this library: {path}") from e
+OSError: Could not load this library: C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torchcodec\libtorchcodec_core4.dll
+[end of libtorchcodec loading traceback].
+
+INFO:     127.0.0.1:56376 - "GET /api/jobs/03ccb770-ae77-441e-b36f-ba82f80330d3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57484 - "DELETE /api/jobs/03ccb770-ae77-441e-b36f-ba82f80330d3 HTTP/1.1" 200 OK
+2026-06-30 05:04:16,289 INFO app.routes.jobs ù Saved 8515303 bytes as input.mp3 for job dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e
+INFO:     127.0.0.1:62303 - "POST /api/jobs HTTP/1.1" 200 OK
+2026-06-30 05:04:16,289 INFO app.services.job_service ù Job dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e queued: model=guitar device=auto
+Loading Roformer guitar model...
+Decoding 'input.mp3' -> wav (44100 Hz stereo)...
+INFO:     127.0.0.1:62303 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+Separating guitar (this can take a while on CPU)...
+C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\contextlib.py:109: FutureWarning: `torch.backends.cuda.sdp_kernel()` is deprecated. In the future, this context manager will be removed. Please see `torch.nn.attention.sdpa_kernel()` for the new context manager, with updated signature.
+  self.gen = func(*args, **kwds)
+INFO:     127.0.0.1:62303 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62303 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62303 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  ~483s estimated for this track
+
+  chunk 1/41
+  chunk 2/41
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 3/41
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 4/41
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 5/41
+INFO:     127.0.0.1:59215 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 6/41
+  chunk 7/41
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 8/41
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 9/41
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64273 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 10/41
+  chunk 11/41
+INFO:     127.0.0.1:59379 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59379 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59379 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59379 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 12/41
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 13/41
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 14/41
+INFO:     127.0.0.1:54907 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 15/41
+INFO:     127.0.0.1:62114 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62114 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62114 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 16/41
+  chunk 17/41
+  chunk 18/41
+INFO:     127.0.0.1:54633 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54633 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 19/41
+INFO:     127.0.0.1:54633 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 20/41
+INFO:     127.0.0.1:59433 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55251 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55251 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55251 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 21/41
+INFO:     127.0.0.1:55251 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 22/41
+INFO:     127.0.0.1:52962 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 23/41
+  chunk 24/41
+  chunk 25/41
+  chunk 26/41
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/jobs/dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e HTTP/1.1" 200 OK
+  chunk 27/41
+INFO:     127.0.0.1:58873 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58873 - "GET /api/models HTTP/1.1" 200 OK
+  chunk 28/41
+  chunk 29/41
+  chunk 30/41
+  chunk 31/41
+  chunk 32/41
+  chunk 33/41
+  chunk 34/41
+  chunk 35/41
+  chunk 36/41
+  chunk 37/41
+  chunk 38/41
+  chunk 39/41
+  chunk 40/41
+  chunk 41/41
+2026-06-30 05:12:17,221 INFO app.services.job_service ù Job dcb7b1ca-7041-4cd4-8b94-1e5b88e0916e completed in 480.9s
+2026-06-30 05:12:49,182 INFO app.routes.jobs ù Saved 8515303 bytes as input.mp3 for job 0cfef4b3-c298-45ab-b65f-e9abd5364b6f
+INFO:     127.0.0.1:64003 - "POST /api/jobs HTTP/1.1" 200 OK
+2026-06-30 05:12:49,182 INFO app.services.job_service ù Job 0cfef4b3-c298-45ab-b65f-e9abd5364b6f queued: model=guitar device=cuda
+Loading Roformer guitar model...
+2026-06-30 05:12:49,564 ERROR app.services.job_service ù Job 0cfef4b3-c298-45ab-b65f-e9abd5364b6f failed:
+Traceback (most recent call last):
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\app\services\job_service.py", line 148, in _process
+    stem_paths = separator.separate(
+        input_path=input_path,
+    ...<2 lines>...
+        progress_callback=progress_callback,
+    )
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\app\separators\guitar_separator.py", line 78, in separate
+    stems, sr = roformer_engine.separate(
+                ~~~~~~~~~~~~~~~~~~~~~~~~^
+        source_path=input_path,
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        ckpt_path=GUITAR_CKPT,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "F:\THE FUCKING PROJECT\guitar_backingtrack-main\roformer_engine.py", line 161, in separate
+    model = model.to(dev)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 1383, in to
+    return self._apply(convert)
+           ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 933, in _apply
+    module._apply(fn)
+    ~~~~~~~~~~~~~^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 933, in _apply
+    module._apply(fn)
+    ~~~~~~~~~~~~~^^^^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 933, in _apply
+    module._apply(fn)
+    ~~~~~~~~~~~~~^^^^
+  [Previous line repeated 4 more times]
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 964, in _apply
+    param_applied = fn(param)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\nn\modules\module.py", line 1369, in convert
+    return t.to(
+           ~~~~^
+        device,
+        ^^^^^^^
+        dtype if t.is_floating_point() or t.is_complex() else None,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        non_blocking,
+        ^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python314\Lib\site-packages\torch\cuda\__init__.py", line 484, in _lazy_init
+    raise AssertionError("Torch not compiled with CUDA enabled")
+AssertionError: Torch not compiled with CUDA enabled
+
+INFO:     127.0.0.1:64003 - "GET /api/jobs/0cfef4b3-c298-45ab-b65f-e9abd5364b6f HTTP/1.1" 200 OK

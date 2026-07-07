@@ -1,206 +1,249 @@
 /**
  * StemAI — app.js
- * Handles file upload, job polling, stem rendering and downloads.
+ * Professional multi-stem audio player using Web Audio API.
+ * Features: synchronized playback, mute/solo, waveform canvas, SSE job tracking.
  */
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const POLL_INTERVAL_MS = 2500;
-const MAX_UPLOAD_MB    = 200;
+'use strict';
 
-const MODEL_DESCRIPTIONS = {
-  guitar:        "Tách electric guitar chuyên dụng bằng MelBand-Roformer Guitar (becruily). Output: electric_guitar + no_electric_guitar.",
-  htdemucs_ft:   "4-stem separation: vocals, drums, bass, other. 'other' chứa keys, synth và mọi thứ không được tách riêng.",
-  htdemucs_6s:   "6-stem: vocals, drums, bass, guitar, piano, other. Thêm guitar và piano so với Stem Basic.",
-  vocal_hq:      "Vocal chất lượng cao dùng htdemucs_ft. Cùng model với Stem Basic nhưng ưu tiên vocal.",
+// ── Constants ──────────────────────────────────────────────────────────────────
+const MAX_UPLOAD_MB = 200;
+const SPEED_STEPS   = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+const STEM_META = {
+  vocals:             { icon: '🎤', color: '#60a5fa', label: 'Vocals' },
+  drums:              { icon: '🥁', color: '#f87171', label: 'Drums' },
+  bass:               { icon: '🎸', color: '#a78bfa', label: 'Bass' },
+  guitar:             { icon: '🎸', color: '#fb923c', label: 'Guitar' },
+  piano:              { icon: '🎹', color: '#34d399', label: 'Piano' },
+  other:              { icon: '🎼', color: '#94a3b8', label: 'Other' },
+  electric_guitar:    { icon: '⚡', color: '#fbbf24', label: 'Electric Guitar' },
+  no_electric_guitar: { icon: '🎵', color: '#6ee7b7', label: 'No Guitar' },
+  backing_track:      { icon: '🎶', color: '#c084fc', label: 'Backing Track' },
+  instrumental:       { icon: '🎵', color: '#c084fc', label: 'Instrumental' },
 };
 
-const STEM_ICONS = {
-  vocals:             "🎤",
-  electric_guitar:    "🎸",
-  no_electric_guitar: "🎵",
-  drums:              "🥁",
-  bass:               "🎸",
-  guitar:             "🎸",
-  piano:              "🎹",
-  other:              "🎼",
-  backing_track:      "🎶",
-  instrumental:       "🎵",
-};
-
-const STATUS_LABELS = {
-  queued:          "Đang chờ trong hàng…",
-  preprocessing:   "Đang chuẩn bị file…",
-  loading_model:   "Đang tải model AI…",
-  separating:      "Đang tách stem…",
-  postprocessing:  "Đang xử lý kết quả…",
-  mixing:          "Đang tạo backing track…",
-  completed:       "Hoàn thành ✓",
-  failed:          "Thất bại ✗",
-};
-
-const PROCESSING_STATUSES = new Set([
-  "queued", "preprocessing", "loading_model", "separating", "postprocessing", "mixing"
-]);
+const STAGE_ORDER = ['preprocessing', 'loading_model', 'separating', 'postprocessing'];
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let selectedFile   = null;
-const activePollers = {}; // job_id → intervalId
+let selectedModel  = null;
+let activeEventSource = null;   // SSE connection
+const studios = {};             // jobId → StudioPlayer instance
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
-const dropZone       = document.getElementById("drop-zone");
-const fileInput      = document.getElementById("file-input");
-const filePreview    = document.getElementById("file-preview");
-const fileName       = document.getElementById("file-name");
-const fileSize       = document.getElementById("file-size");
-const removeFileBtn  = document.getElementById("remove-file-btn");
-const startBtn       = document.getElementById("start-btn");
-const modelSelect    = document.getElementById("model-select");
-const deviceSelect   = document.getElementById("device-select");
-const modelDesc      = document.getElementById("model-desc");
-const jobsSection    = document.getElementById("jobs-section");
-const jobsList       = document.getElementById("jobs-list");
-const modelsGrid     = document.getElementById("models-grid");
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const dropZone      = document.getElementById('drop-zone');
+const fileInput     = document.getElementById('file-input');
+const filePreview   = document.getElementById('file-preview');
+const fpName        = document.getElementById('fp-name');
+const fpMeta        = document.getElementById('fp-meta');
+const fpRemove      = document.getElementById('fp-remove');
+const startBtn      = document.getElementById('start-btn');
+const modelGrid     = document.getElementById('model-grid');
+const uploadWrap    = document.getElementById('upload-progress-wrap');
+const uploadBar     = document.getElementById('upload-progress-bar');
+const uploadPct     = document.getElementById('upload-pct');
+const jobsSection   = document.getElementById('jobs-section');
+const jobsList      = document.getElementById('jobs-list');
+const newJobBtn     = document.getElementById('new-job-btn');
+const toastCon      = document.getElementById('toast-container');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-  updateModelDesc();
-  loadModelsGrid();
+document.addEventListener('DOMContentLoaded', () => {
   setupDropZone();
   setupFileInput();
   setupStartButton();
-  modelSelect.addEventListener("change", updateModelDesc);
-  removeFileBtn.addEventListener("click", clearFile);
+  fpRemove.addEventListener('click', clearFile);
+  newJobBtn.addEventListener('click', () => {
+    jobsSection.classList.add('hidden');
+    document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Space bar = play/pause active studio
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+      e.preventDefault();
+      const s = Object.values(studios).find(s => s.isActive());
+      if (s) s.togglePlay();
+    }
+  });
+
+  loadModels();
 });
 
-// ── Model description ─────────────────────────────────────────────────────────
-function updateModelDesc() {
-  modelDesc.textContent = MODEL_DESCRIPTIONS[modelSelect.value] || "";
-}
-
-// ── Models grid ───────────────────────────────────────────────────────────────
-async function loadModelsGrid() {
+// ── Models ─────────────────────────────────────────────────────────────────────
+async function loadModels() {
   try {
-    const res = await fetch("/api/models");
-    const { models } = await res.json();
-    modelsGrid.innerHTML = "";
-    models.forEach(m => {
-      const card = document.createElement("div");
-      card.className = "model-card";
-      card.innerHTML = `
-        <div class="model-card-name">${m.name}</div>
-        <div class="model-card-desc">${m.description}</div>
-        <div class="model-card-stems">
-          ${m.stems.map(s => `<span>${s}</span>`).join("")}
-        </div>
-        ${m.note ? `<div class="model-card-note">ℹ️ ${m.note}</div>` : ""}
-      `;
-      modelsGrid.appendChild(card);
-    });
+    const res  = await fetch('/api/models');
+    const data = await res.json();
+    renderModelPicker(data.models);
   } catch {
-    modelsGrid.innerHTML = "<p style='color:var(--text-muted)'>Không thể tải danh sách model.</p>";
+    modelGrid.innerHTML = '<p style="color:var(--t3);font-size:.82rem">Không thể tải danh sách model.</p>';
   }
 }
 
-// ── Drop zone ─────────────────────────────────────────────────────────────────
+function renderModelPicker(models) {
+  modelGrid.innerHTML = '';
+  models.forEach((m, i) => {
+    const opt = document.createElement('label');
+    opt.className = 'model-opt' + (i === 0 ? ' selected' : '');
+    opt.innerHTML = `
+      <input type="radio" name="model" value="${m.id}" ${i === 0 ? 'checked' : ''} />
+      <div class="model-opt-name">${m.name}</div>
+      <div class="model-opt-label">${m.label}</div>
+      <div class="model-opt-dot"></div>
+    `;
+    opt.querySelector('input').addEventListener('change', () => {
+      document.querySelectorAll('.model-opt').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      selectedModel = m.id;
+    });
+    modelGrid.appendChild(opt);
+  });
+  selectedModel = models[0]?.id || 'htdemucs_ft';
+}
+
+// ── Drop zone ──────────────────────────────────────────────────────────────────
 function setupDropZone() {
-  dropZone.addEventListener("dragover", e => {
+  dropZone.addEventListener('dragover', e => {
     e.preventDefault();
-    dropZone.classList.add("drag-over");
+    dropZone.classList.add('drag-over');
   });
-  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-  dropZone.addEventListener("drop", e => {
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
     e.preventDefault();
-    dropZone.classList.remove("drag-over");
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleFile(file);
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) handleFile(f);
   });
-  dropZone.addEventListener("keydown", e => {
-    if (e.key === "Enter" || e.key === " ") fileInput.click();
+  dropZone.addEventListener('click', e => {
+    if (e.target.tagName !== 'LABEL' && e.target.tagName !== 'INPUT') fileInput.click();
   });
-  dropZone.addEventListener("click", e => {
-    if (e.target.tagName !== "LABEL" && e.target.tagName !== "INPUT") {
-      fileInput.click();
-    }
+  dropZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') fileInput.click();
   });
 }
 
 function setupFileInput() {
-  fileInput.addEventListener("change", () => {
+  fileInput.addEventListener('change', () => {
     if (fileInput.files[0]) handleFile(fileInput.files[0]);
   });
 }
 
 function handleFile(file) {
-  const maxBytes = MAX_UPLOAD_MB * 1024 * 1024;
-  if (file.size > maxBytes) {
-    alert(`File quá lớn (${(file.size / 1024 / 1024).toFixed(1)} MB). Tối đa ${MAX_UPLOAD_MB} MB.`);
+  const mb = file.size / 1048576;
+  if (mb > MAX_UPLOAD_MB) {
+    showToast(`File quá lớn (${mb.toFixed(1)} MB). Tối đa ${MAX_UPLOAD_MB} MB.`, 'err');
     return;
   }
   selectedFile = file;
-  fileName.textContent = file.name;
-  fileSize.textContent = formatBytes(file.size);
-  dropZone.classList.add("hidden");
-  filePreview.classList.remove("hidden");
+  fpName.textContent = file.name;
+  fpMeta.textContent = `${fmtBytes(file.size)} · ${file.type || 'audio'}`;
+  dropZone.classList.add('hidden');
+  filePreview.classList.remove('hidden');
   startBtn.disabled = false;
 }
 
 function clearFile() {
   selectedFile = null;
-  fileInput.value = "";
-  filePreview.classList.add("hidden");
-  dropZone.classList.remove("hidden");
+  fileInput.value = '';
+  filePreview.classList.add('hidden');
+  dropZone.classList.remove('hidden');
   startBtn.disabled = true;
 }
 
-// ── Upload & create job ───────────────────────────────────────────────────────
+// ── Upload & create job ────────────────────────────────────────────────────────
 function setupStartButton() {
-  startBtn.addEventListener("click", async () => {
-    if (!selectedFile) return;
+  startBtn.addEventListener('click', async () => {
+    if (!selectedFile || !selectedModel) return;
 
     startBtn.disabled = true;
-    startBtn.textContent = "Đang upload…";
+    uploadWrap.classList.remove('hidden');
+    uploadBar.style.width = '0%';
+    uploadPct.textContent = '0%';
 
     const fd = new FormData();
-    fd.append("file", selectedFile);
-    fd.append("model_id", modelSelect.value);
-    fd.append("device", deviceSelect.value);
+    fd.append('file', selectedFile);
+    fd.append('model_id', selectedModel);
+    fd.append('device', 'auto');
 
     try {
-      const res = await fetch("/api/jobs", { method: "POST", body: fd });
-      const job = await res.json();
-      if (!res.ok) {
-        alert(`Lỗi: ${job.detail || "Upload thất bại"}`);
-        startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon-left">🚀</span> Bắt đầu tách stem';
-        return;
-      }
-      // Success: clear file, show jobs section, render card
-      clearFile();
-      startBtn.innerHTML = '<span class="btn-icon-left">🚀</span> Bắt đầu tách stem';
-      jobsSection.classList.remove("hidden");
-      prependJobCard(job);
-      startPolling(job.id);
+      const job = await xhrUpload('/api/jobs', fd, (pct) => {
+        uploadBar.style.width = pct + '%';
+        uploadPct.textContent = pct + '%';
+      });
 
-      // Smooth scroll to jobs
-      document.getElementById("jobs-section").scrollIntoView({ behavior: "smooth" });
+      uploadWrap.classList.add('hidden');
+      uploadBar.style.width = '0%';
+      clearFile();
+      startBtn.innerHTML = '<svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor" width="18"><path d="M8 5l8 5-8 5V5z"/></svg> Bắt đầu tách stem';
+      startBtn.disabled = true;
+
+      jobsSection.classList.remove('hidden');
+      showJobCard(job);
+      connectSSE(job.id);
+      jobsSection.scrollIntoView({ behavior: 'smooth' });
+
     } catch (err) {
-      alert(`Lỗi kết nối: ${err.message}`);
+      uploadWrap.classList.add('hidden');
       startBtn.disabled = false;
-      startBtn.innerHTML = '<span class="btn-icon-left">🚀</span> Bắt đầu tách stem';
+      startBtn.innerHTML = '<svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor" width="18"><path d="M8 5l8 5-8 5V5z"/></svg> Bắt đầu tách stem';
+      showToast(`Lỗi upload: ${err.message}`, 'err');
     }
   });
 }
 
-// ── Job card rendering ────────────────────────────────────────────────────────
-function prependJobCard(job) {
-  const tmpl = document.getElementById("job-card-template").content.cloneNode(true);
-  const card = tmpl.querySelector(".job-card");
-  card.dataset.jobId = job.id;
-  card.querySelector(".job-filename").textContent = job.input_filename || "audio";
-  card.querySelector(".job-model-badge").textContent = job.model_id;
+function xhrUpload(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+    xhr.addEventListener('load', () => {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.detail || `HTTP ${xhr.status}`));
+    });
+    xhr.addEventListener('error', () => reject(new Error('Lỗi kết nối mạng')));
+    xhr.send(formData);
+  });
+}
 
-  const deleteBtn = card.querySelector(".job-delete-btn");
-  deleteBtn.addEventListener("click", () => deleteJob(job.id));
+// ── Job card ───────────────────────────────────────────────────────────────────
+function showJobCard(job) {
+  const tpl  = document.getElementById('job-card-tpl');
+  const node = tpl.content.cloneNode(true);
+  const card = node.querySelector('.job-card');
+  card.dataset.jobId = job.id;
+
+  // Find sub-sections
+  const procEl   = card.querySelector('.job-processing');
+  const failEl   = card.querySelector('.job-failed');
+  const studioEl = card.querySelector('.job-studio');
+
+  // ── Processing state ──
+  procEl.querySelector('.jp-filename').textContent = job.input_filename || 'audio';
+  const cancelBtn = procEl.querySelector('.jp-cancel');
+  cancelBtn.addEventListener('click', () => cancelJob(job.id));
+  procEl.classList.remove('hidden');
+
+  // ── Failed delete/retry ──
+  failEl.querySelector('.jf-delete').addEventListener('click', () => {
+    deleteJob(job.id, card);
+  });
+  failEl.querySelector('.jf-retry').addEventListener('click', () => {
+    card.remove();
+    startBtn.disabled = false;
+    document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ── Studio delete ──
+  studioEl.querySelector('.studio-delete').addEventListener('click', () => {
+    deleteJob(job.id, card);
+  });
 
   jobsList.prepend(card);
   updateJobCard(job);
@@ -210,149 +253,483 @@ function updateJobCard(job) {
   const card = document.querySelector(`.job-card[data-job-id="${job.id}"]`);
   if (!card) return;
 
-  // Status dot
-  const dot = card.querySelector(".job-status-dot");
-  dot.className = "job-status-dot " + (
-    PROCESSING_STATUSES.has(job.status) ? "processing" : job.status
-  );
+  const procEl   = card.querySelector('.job-processing');
+  const failEl   = card.querySelector('.job-failed');
+  const studioEl = card.querySelector('.job-studio');
 
-  // Status text
-  card.querySelector(".job-status-text").textContent =
-    (STATUS_LABELS[job.status] || job.status) +
-    (job.stage_detail && job.status !== "completed" && job.status !== "failed"
-      ? ` — ${job.stage_detail}` : "");
-
-  // Elapsed
-  if (job.elapsed_seconds != null) {
-    card.querySelector(".job-elapsed").textContent = formatDuration(job.elapsed_seconds);
-  }
-
-  // Progress bar
-  const progressWrap = card.querySelector(".job-progress-bar-wrap");
-  if (PROCESSING_STATUSES.has(job.status)) {
-    progressWrap.classList.remove("hidden");
-  } else {
-    progressWrap.classList.add("hidden");
-  }
-
-  // Error
-  const errorBox = card.querySelector(".job-error-box");
-  if (job.status === "failed" && job.error) {
-    errorBox.classList.remove("hidden");
-    errorBox.textContent = job.error;
-  } else {
-    errorBox.classList.add("hidden");
-  }
-
-  // Stems
-  if (job.status === "completed" && job.stems && Object.keys(job.stems).length > 0) {
-    const stemsSection = card.querySelector(".job-stems-section");
-    stemsSection.classList.remove("hidden");
-    renderStems(card, job);
-  }
-}
-
-function renderStems(card, job) {
-  const grid = card.querySelector(".stems-grid");
-  if (grid.dataset.rendered) return; // avoid re-rendering
-  grid.dataset.rendered = "1";
-
-  const stemTmpl = document.getElementById("stem-card-template");
-
-  for (const [stemName, stemUrl] of Object.entries(job.stems)) {
-    const sc = stemTmpl.content.cloneNode(true);
-    const stemCard = sc.querySelector(".stem-card");
-
-    stemCard.querySelector(".stem-icon").textContent =
-      STEM_ICONS[stemName] || "🎵";
-    stemCard.querySelector(".stem-name").textContent =
-      formatStemName(stemName);
-
-    const audio = stemCard.querySelector(".stem-audio");
-    audio.src = stemUrl;
-
-    const dlBtn = stemCard.querySelector(".stem-download-btn");
-    dlBtn.href = stemUrl;
-    dlBtn.download = `${job.input_filename}_${stemName}.wav`;
-
-    grid.appendChild(stemCard);
-  }
-
-  // ZIP button
-  if (job.download_url) {
-    const dlBtn = card.querySelector(".job-download-all-btn");
-    dlBtn.href = job.download_url;
-    dlBtn.download = `${job.input_filename}_stems.zip`;
-  }
-}
-
-// ── Polling ───────────────────────────────────────────────────────────────────
-function startPolling(jobId) {
-  if (activePollers[jobId]) return;
-  activePollers[jobId] = setInterval(() => pollJob(jobId), POLL_INTERVAL_MS);
-}
-
-async function pollJob(jobId) {
-  try {
-    const res = await fetch(`/api/jobs/${jobId}`);
-    if (!res.ok) { stopPolling(jobId); return; }
-    const job = await res.json();
-    updateJobCard(job);
-    if (!PROCESSING_STATUSES.has(job.status)) {
-      stopPolling(jobId);
+  if (job.status === 'completed') {
+    procEl.classList.add('hidden');
+    failEl.classList.add('hidden');
+    studioEl.classList.remove('hidden');
+    card.classList.add('completed');
+    if (!studios[job.id]) {
+      const studio = new StudioPlayer(job, studioEl);
+      studios[job.id] = studio;
     }
-  } catch {
-    // Network error — keep polling
+    return;
+  }
+
+  if (job.status === 'failed') {
+    procEl.classList.add('hidden');
+    studioEl.classList.add('hidden');
+    failEl.classList.remove('hidden');
+    failEl.querySelector('.jf-error').textContent = job.error || 'Lỗi không xác định.';
+    return;
+  }
+
+  // Processing states
+  procEl.classList.remove('hidden');
+  failEl.classList.add('hidden');
+  studioEl.classList.add('hidden');
+
+  // Update stage dots
+  const stages = procEl.querySelectorAll('.jp-stage');
+  const stageIdx = STAGE_ORDER.indexOf(job.status);
+  stages.forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < stageIdx) el.classList.add('done');
+    else if (i === stageIdx) el.classList.add('active');
+  });
+
+  // Detail + elapsed
+  procEl.querySelector('.jp-detail').textContent = job.stage_detail || '';
+  if (job.elapsed_seconds != null) {
+    procEl.querySelector('.jp-elapsed').textContent = fmtDuration(job.elapsed_seconds);
   }
 }
 
-function stopPolling(jobId) {
-  clearInterval(activePollers[jobId]);
-  delete activePollers[jobId];
+// ── SSE ────────────────────────────────────────────────────────────────────────
+function connectSSE(jobId) {
+  if (activeEventSource) activeEventSource.close();
+  const es = new EventSource(`/api/jobs/${jobId}/events`);
+  activeEventSource = es;
+
+  es.addEventListener('message', e => {
+    try {
+      const job = JSON.parse(e.data);
+      updateJobCard(job);
+      if (job.status === 'completed') {
+        showToast('Tách stem hoàn thành! 🎉', 'ok');
+        es.close();
+        activeEventSource = null;
+      }
+      if (job.status === 'failed') {
+        showToast(`Lỗi: ${job.error}`, 'err');
+        es.close();
+        activeEventSource = null;
+      }
+    } catch {}
+  });
+
+  es.addEventListener('error', () => {
+    // SSE closed (normal for completed jobs), ignore.
+    es.close();
+  });
 }
 
-// ── Delete job ────────────────────────────────────────────────────────────────
-async function deleteJob(jobId) {
-  if (!confirm("Xoá job này và tất cả file liên quan?")) return;
-  stopPolling(jobId);
+// ── Cancel / Delete ────────────────────────────────────────────────────────────
+async function cancelJob(jobId) {
   try {
-    await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
-  } catch { /* ignore */ }
-  const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
-  if (card) {
-    card.style.opacity = "0";
-    card.style.transform = "translateX(40px)";
-    card.style.transition = "opacity .3s, transform .3s";
-    setTimeout(() => card.remove(), 320);
+    await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
+    showToast('Đã hủy job.', 'ok');
+    if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
+    const job = await (await fetch(`/api/jobs/${jobId}`)).json();
+    updateJobCard(job);
+  } catch (err) {
+    showToast(`Lỗi hủy: ${err.message}`, 'err');
   }
+}
+
+async function deleteJob(jobId, card) {
+  if (!confirm('Xóa job và tất cả file liên quan?')) return;
+  try {
+    await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+    if (studios[jobId]) { studios[jobId].destroy(); delete studios[jobId]; }
+    card.style.animation = 'toast-out .25s ease forwards';
+    setTimeout(() => card.remove(), 260);
+    const remaining = document.querySelectorAll('.job-card');
+    if (!remaining.length) jobsSection.classList.add('hidden');
+  } catch (err) {
+    showToast(`Lỗi xóa: ${err.message}`, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// StudioPlayer — Web Audio API synchronized multi-stem player
+// ═══════════════════════════════════════════════════════════════════════════════
+class StudioPlayer {
+  constructor(job, containerEl) {
+    this.job     = job;
+    this.el      = containerEl;
+    this.ctx     = new (window.AudioContext || window.webkitAudioContext)();
+    this.tracks  = {};    // stemName → TrackNode
+    this.startAt = 0;     // AudioContext time when we hit play
+    this.pausedAt= 0;     // elapsed seconds when paused
+    this.playing = false;
+    this.loop    = false;
+    this.speed   = 1.0;
+    this.duration= 0;
+    this.soloSet = new Set();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.connect(this.ctx.destination);
+
+    this._raf = null;      // requestAnimationFrame id
+    this._ready = false;
+
+    this._render();
+    this._loadStems();
+  }
+
+  isActive() { return this._ready; }
+
+  // ── Render static parts ──────────────────────────────────────────────────────
+  _render() {
+    const el = this.el;
+
+    // Header
+    el.querySelector('.studio-filename').textContent = this.job.input_filename || 'audio';
+    el.querySelector('.studio-model-badge').textContent = this.job.model_id;
+
+    // ZIP download
+    const dlBtn = el.querySelector('.studio-download-zip');
+    if (this.job.download_url) {
+      dlBtn.href = this.job.download_url;
+    } else {
+      dlBtn.classList.add('hidden');
+    }
+
+    // Elapsed
+    if (this.job.elapsed_seconds) {
+      el.querySelector('.studio-elapsed-note').textContent =
+        `⏱ Thời gian tách: ${fmtDuration(this.job.elapsed_seconds)}`;
+    }
+
+    // Master controls
+    const playBtn   = el.querySelector('.mc-play');
+    const restartBtn= el.querySelector('.mc-restart');
+    const loopBtn   = el.querySelector('.mc-loop-btn');
+    const speedBtn  = el.querySelector('.mc-speed-btn');
+    const volSlider = el.querySelector('.mc-vol');
+    this._playBtn   = playBtn;
+    this._timeline  = el.querySelector('.timeline-waveform');
+    this._progress  = el.querySelector('.waveform-progress');
+    this._playhead  = el.querySelector('.waveform-playhead');
+    this._curTime   = el.querySelector('.mc-current');
+    this._totTime   = el.querySelector('.mc-total');
+
+    playBtn.addEventListener('click', () => this.togglePlay());
+    restartBtn.addEventListener('click', () => this.seek(0));
+    loopBtn.addEventListener('click', () => {
+      this.loop = !this.loop;
+      loopBtn.classList.toggle('active', this.loop);
+    });
+    speedBtn.addEventListener('click', () => {
+      const i  = SPEED_STEPS.indexOf(this.speed);
+      this.speed = SPEED_STEPS[(i + 1) % SPEED_STEPS.length];
+      speedBtn.textContent = this.speed + '×';
+      this._applySpeed();
+    });
+    volSlider.addEventListener('input', () => {
+      this.masterGain.gain.value = parseFloat(volSlider.value);
+    });
+    this._timeline.addEventListener('click', e => {
+      const rect = this._timeline.getBoundingClientRect();
+      const pct  = (e.clientX - rect.left) / rect.width;
+      this.seek(pct * this.duration);
+    });
+
+    // Stem tracks container
+    this._tracksEl = el.querySelector('.stem-tracks');
+  }
+
+  // ── Load all stems via Web Audio API ─────────────────────────────────────────
+  async _loadStems() {
+    const stemEntries = Object.entries(this.job.stems || {});
+    if (!stemEntries.length) return;
+
+    // Create GainNodes first so UI is ready
+    for (const [name, url] of stemEntries) {
+      const gain = this.ctx.createGain();
+      gain.connect(this.masterGain);
+      this.tracks[name] = { gain, buffer: null, source: null, url, loaded: false };
+      this._addStemTrack(name);
+    }
+
+    // Load all buffers in parallel
+    const loads = stemEntries.map(([name, url]) => this._loadBuffer(name, url));
+    await Promise.all(loads);
+
+    // Calculate real duration
+    this.duration = Math.max(...Object.values(this.tracks).map(t => t.buffer?.duration || 0));
+    this._totTime.textContent = fmtTime(this.duration);
+    this.el.querySelector('.time-total').textContent = fmtTime(this.duration);
+    this._ready = true;
+
+    // Draw master waveform (first stem)
+    const [firstName] = Object.keys(this.tracks);
+    if (firstName && this.tracks[firstName].buffer) {
+      this._drawWaveform(this._timeline.querySelector('.waveform-canvas'), this.tracks[firstName].buffer, STEM_META[firstName]?.color);
+    }
+  }
+
+  async _loadBuffer(name, url) {
+    try {
+      const res = await fetch(url);
+      const ab  = await res.arrayBuffer();
+      const buf = await this.ctx.decodeAudioData(ab);
+      this.tracks[name].buffer = buf;
+      this.tracks[name].loaded = true;
+      // Draw waveform on stem track canvas
+      const trackEl = this._tracksEl.querySelector(`.stem-track[data-stem="${name}"]`);
+      if (trackEl) {
+        const canvas = trackEl.querySelector('.stem-waveform-canvas');
+        if (canvas) this._drawWaveform(canvas, buf, STEM_META[name]?.color);
+      }
+    } catch (e) {
+      console.warn('Failed to load stem:', name, e);
+    }
+  }
+
+  // ── Waveform drawing ─────────────────────────────────────────────────────────
+  _drawWaveform(canvas, buffer, color = '#6366f1') {
+    if (!canvas) return;
+    const dpr  = window.devicePixelRatio || 1;
+    const W    = canvas.parentElement.clientWidth || 600;
+    const H    = canvas.parentElement.clientHeight || 64;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const data   = buffer.getChannelData(0);
+    const step   = Math.ceil(data.length / W);
+    const halfH  = H / 2;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = color + '60';
+
+    for (let x = 0; x < W; x++) {
+      let max = 0;
+      for (let j = 0; j < step; j++) {
+        const v = Math.abs(data[x * step + j] || 0);
+        if (v > max) max = v;
+      }
+      const barH = max * halfH * 0.95;
+      ctx.fillRect(x, halfH - barH, 1, barH * 2);
+    }
+  }
+
+  // ── Stem track UI ─────────────────────────────────────────────────────────────
+  _addStemTrack(name) {
+    const meta = STEM_META[name] || { icon: '🎵', color: '#6366f1', label: name };
+    const tpl  = document.getElementById('stem-track-tpl');
+    const node = tpl.content.cloneNode(true);
+    const el   = node.querySelector('.stem-track');
+    el.dataset.stem = name;
+
+    el.querySelector('.st-icon').textContent = meta.icon;
+    el.querySelector('.st-name').textContent = meta.label;
+
+    // Add small waveform canvas inside track (optional)
+    // (we keep it lightweight — just a colored line)
+
+    const muteBtn = el.querySelector('.st-mute');
+    const soloBtn = el.querySelector('.st-solo');
+    const volSlider = el.querySelector('.st-vol');
+    const dlBtn  = el.querySelector('.st-download');
+
+    // Volume
+    volSlider.style.setProperty('accent-color', meta.color);
+    volSlider.addEventListener('input', () => {
+      const track = this.tracks[name];
+      if (track?.gain) track.gain.gain.value = parseFloat(volSlider.value);
+    });
+
+    // Mute
+    muteBtn.addEventListener('click', () => {
+      const track = this.tracks[name];
+      if (!track) return;
+      track.muted = !track.muted;
+      muteBtn.classList.toggle('active', track.muted);
+      el.classList.toggle('muted', track.muted);
+      this._updateGains();
+    });
+
+    // Solo
+    soloBtn.addEventListener('click', () => {
+      if (this.soloSet.has(name)) {
+        this.soloSet.delete(name);
+        soloBtn.classList.remove('active');
+        el.classList.remove('soloed');
+      } else {
+        this.soloSet.add(name);
+        soloBtn.classList.add('active');
+        el.classList.add('soloed');
+      }
+      this._updateGains();
+    });
+
+    // Download
+    dlBtn.href = this.job.stems[name];
+    dlBtn.download = `${this.job.input_filename}_${name}.wav`;
+
+    this._tracksEl.appendChild(el);
+  }
+
+  _updateGains() {
+    const hasSolo = this.soloSet.size > 0;
+    for (const [name, track] of Object.entries(this.tracks)) {
+      if (!track.gain) continue;
+      const el = this._tracksEl.querySelector(`.stem-track[data-stem="${name}"]`);
+      const volEl = el?.querySelector('.st-vol');
+      const vol   = parseFloat(volEl?.value || '1');
+      let finalGain = vol;
+      if (track.muted) finalGain = 0;
+      else if (hasSolo && !this.soloSet.has(name)) finalGain = 0;
+      track.gain.gain.value = finalGain;
+    }
+  }
+
+  // ── Playback ──────────────────────────────────────────────────────────────────
+  togglePlay() {
+    if (this.playing) this.pause();
+    else this.play();
+  }
+
+  play() {
+    if (!this._ready || this.playing) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+
+    const offset = this.pausedAt;
+    this.startAt = this.ctx.currentTime - offset / this.speed;
+
+    for (const [, track] of Object.entries(this.tracks)) {
+      if (!track.buffer) continue;
+      const src = this.ctx.createBufferSource();
+      src.buffer = track.buffer;
+      src.playbackRate.value = this.speed;
+      src.loop = this.loop;
+      src.connect(track.gain);
+      src.start(0, offset);
+      track.source = src;
+      src.onended = () => {
+        if (this.playing && !this.loop) {
+          // Check if all tracks ended
+          this.playing = false;
+          this.pausedAt = 0;
+          this._updatePlayBtn();
+          this._stopRaf();
+        }
+      };
+    }
+
+    this.playing = true;
+    this._updatePlayBtn();
+    this._startRaf();
+  }
+
+  pause() {
+    if (!this.playing) return;
+    this.pausedAt = (this.ctx.currentTime - this.startAt) * this.speed;
+    for (const [, track] of Object.entries(this.tracks)) {
+      try { track.source?.stop(); } catch {}
+      track.source = null;
+    }
+    this.playing = false;
+    this._updatePlayBtn();
+    this._stopRaf();
+  }
+
+  seek(seconds) {
+    const wasPlaying = this.playing;
+    if (this.playing) this.pause();
+    this.pausedAt = Math.max(0, Math.min(seconds, this.duration));
+    this._updateTimeline(this.pausedAt);
+    if (wasPlaying) this.play();
+  }
+
+  _applySpeed() {
+    if (!this.playing) return;
+    const pos = (this.ctx.currentTime - this.startAt) * this.speed;
+    this.pause();
+    this.pausedAt = pos;
+    this.play();
+  }
+
+  _updatePlayBtn() {
+    const iconPlay  = this._playBtn.querySelector('.icon-play');
+    const iconPause = this._playBtn.querySelector('.icon-pause');
+    iconPlay.classList.toggle('hidden', this.playing);
+    iconPause.classList.toggle('hidden', !this.playing);
+  }
+
+  _startRaf() {
+    const tick = () => {
+      if (!this.playing) return;
+      const elapsed = (this.ctx.currentTime - this.startAt) * this.speed;
+      this._updateTimeline(elapsed);
+      if (!this.loop && elapsed >= this.duration) {
+        this.pause();
+        this.pausedAt = 0;
+        this._updateTimeline(0);
+        return;
+      }
+      this._raf = requestAnimationFrame(tick);
+    };
+    this._raf = requestAnimationFrame(tick);
+  }
+
+  _stopRaf() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
+  }
+
+  _updateTimeline(elapsed) {
+    const pct = this.duration > 0 ? Math.min(elapsed / this.duration, 1) : 0;
+    this._progress.style.width = (pct * 100) + '%';
+    this._playhead.style.left  = (pct * 100) + '%';
+    this._curTime.textContent  = fmtTime(elapsed);
+    this.el.querySelector('.time-current').textContent = fmtTime(elapsed);
+  }
+
+  destroy() {
+    this.pause();
+    try { this.ctx.close(); } catch {}
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'ok') {
+  const icon = type === 'ok' ? '✓' : '✕';
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-msg">${msg}</span>
+    <button class="toast-close btn-icon" onclick="this.closest('.toast').remove()">✕</button>
+  `;
+  toastCon.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'toast-out .25s ease forwards';
+    setTimeout(() => el.remove(), 260);
+  }, 4000);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+function fmtBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-function formatDuration(seconds) {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return `${m}m ${s}s`;
+function fmtTime(sec) {
+  sec = Math.max(0, sec || 0);
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
 
-function formatStemName(name) {
-  const map = {
-    electric_guitar:    "Electric Guitar",
-    no_electric_guitar: "No Electric Guitar",
-    vocals:             "Vocals",
-    drums:              "Drums",
-    bass:               "Bass",
-    guitar:             "Guitar",
-    piano:              "Piano",
-    other:              "Other",
-    backing_track:      "Backing Track",
-    instrumental:       "Instrumental",
-  };
-  return map[name] || name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+function fmtDuration(sec) {
+  if (sec < 60) return Math.round(sec) + 's';
+  return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
 }

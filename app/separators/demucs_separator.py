@@ -34,6 +34,28 @@ DEMUCS_STEMS: dict[str, list[str]] = {
     "htdemucs_6s": ["vocals", "drums", "bass", "guitar", "piano", "other"],
 }
 
+# ── Model cache (load once, reuse across jobs) ───────────────────────────────
+import threading
+_model_lock  = threading.Lock()
+_model_cache: dict[str, object] = {}  # model_id → loaded model
+
+
+def _get_cached_model(model_id: str):
+    """Return a cached Demucs model, loading it on first call."""
+    with _model_lock:
+        if model_id in _model_cache:
+            log.debug("Demucs model cache hit: %s", model_id)
+            return _model_cache[model_id]
+
+        log.info("Loading Demucs model %s (first time)…", model_id)
+        import demucs.pretrained
+        model = demucs.pretrained.get_model(model_id)
+        model.cpu()
+        model.eval()
+        _model_cache[model_id] = model
+        log.info("Demucs model %s cached.", model_id)
+        return model
+
 
 class DemucsSeparator(BaseSeparator):
     """General stem separation using Demucs pretrained models."""
@@ -77,14 +99,11 @@ class DemucsSeparator(BaseSeparator):
 
             _cb("separating", f"Running {self.model_id} on {resolved_device}…")
 
-            import demucs.pretrained
             import demucs.apply
             import torch
 
-            # Load model and move to CPU initially to save VRAM
-            model = demucs.pretrained.get_model(self.model_id)
-            model.cpu()
-            model.eval()
+            # Load or retrieve cached model
+            model = _get_cached_model(self.model_id)
 
             # Load audio using torchaudio (which works for loading, just not saving on Windows)
             mix, sr = _load_audio(wav_in, model.samplerate)
