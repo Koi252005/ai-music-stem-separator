@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 DEMUCS_STEMS: dict[str, list[str]] = {
     "htdemucs_ft": ["vocals", "drums", "bass", "other"],
     "htdemucs_6s": ["vocals", "drums", "bass", "guitar", "piano", "other"],
+    "mdx_extra": ["vocals", "drums", "bass", "other"],
 }
 
 # ── Model cache (load once, reuse across jobs) ───────────────────────────────
@@ -84,6 +85,14 @@ class DemucsSeparator(BaseSeparator):
         resolved_device = _resolve_device(device)
         log.info("Demucs %s on %s: %s", self.model_id, resolved_device, input_path)
 
+        # Optimize CPU threads for PyTorch to avoid thread contention
+        if resolved_device == "cpu":
+            import multiprocessing
+            cpu_count = multiprocessing.cpu_count()
+            # Usually 4-6 threads is the sweet spot for PyTorch CPU inference
+            optimal_threads = max(1, min(6, cpu_count // 2))
+            torch.set_num_threads(optimal_threads)
+
         _cb("loading_model", f"Loading Demucs model {self.model_id}…")
 
         # Pre-decode to WAV so Demucs always gets a clean stereo input.
@@ -113,13 +122,15 @@ class DemucsSeparator(BaseSeparator):
 
             _cb("separating", "Processing audio…")
             with torch.no_grad():
+                # For mdx models, we can use slightly different parameters or rely on defaults.
+                # Lowering overlap speeds up processing at a slight quality cost.
                 out = demucs.apply.apply_model(
                     model, 
                     mix, 
                     device=resolved_device,
                     shifts=1, 
                     split=True, 
-                    overlap=0.25, 
+                    overlap=0.1, 
                     progress=False
                 )
             
