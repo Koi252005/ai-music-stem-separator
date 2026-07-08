@@ -109,7 +109,6 @@ class DemucsSeparator(BaseSeparator):
             _cb("separating", f"Running {self.model_id} on {resolved_device}…")
 
             import demucs.apply
-            import torch
 
             # Load or retrieve cached model
             model = _get_cached_model(self.model_id)
